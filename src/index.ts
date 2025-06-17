@@ -1,31 +1,27 @@
 // Core DI Container
-export { DIContainer, container } from './di-container';
-
-// Errors
-export {
-  DIContainerError,
-  CircularDependencyError,
-  ServiceNotFoundError,
-} from './di-container';
-
-// Types
-export type {
-  Constructor,
-  AbstractConstructor,
-  AnyConstructor,
-  Factory,
-  AsyncFactory,
-  ServiceRegistration,
-  DIContainerOptions,
-  ServiceResolver,
-  IDIContainer,
-} from './types';
-
-export { LifetimeScope } from './types';
-
-// Logger
-export type { Logger } from './logger';
-export { ConsoleLogger, NoOpLogger, createLogger } from './logger';
 
 // Decorators (optional - requires reflect-metadata)
-export { Injectable, Inject, autoRegister, isInjectable } from './decorators'; 
+export { autoRegister, Inject, Injectable, isInjectable } from './decorators';
+export {
+  CircularDependencyError,
+  container,
+  DIContainer,
+  DIContainerError,
+  ServiceNotFoundError,
+} from './di-container';
+// Logger
+export type { Logger } from './logger';
+export { ConsoleLogger, createLogger, NoOpLogger } from './logger';
+// Types
+export type {
+  AbstractConstructor,
+  AnyConstructor,
+  AsyncFactory,
+  Constructor,
+  DIContainerOptions,
+  Factory,
+  IDIContainer,
+  ServiceRegistration,
+  ServiceResolver,
+} from './types';
+export { LifetimeScope } from './types';

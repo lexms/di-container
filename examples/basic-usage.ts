@@ -1,4 +1,4 @@
-import { DIContainer, LifetimeScope } from '../src';
+import { DIContainer } from '../src';
 
 // Example interfaces and classes
 interface ILogger {
@@ -34,14 +34,14 @@ class InMemoryUserRepository implements IUserRepository {
   }
 
   getUserById(id: string): User | null {
-    return this.users.find(user => user.id === id) || null;
+    return this.users.find((user) => user.id === id) || null;
   }
 }
 
 class UserService {
   constructor(
     private userRepository: IUserRepository,
-    private logger: ILogger
+    private logger: ILogger,
   ) {}
 
   async getAllUsers(): Promise<User[]> {
@@ -69,7 +69,7 @@ class NotificationService {
   async sendWelcomeEmail(user: User): Promise<void> {
     this.logger.log(`Sending welcome email to ${user.email}`);
     // Simulate async operation
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 100));
     this.logger.log(`Welcome email sent to ${user.name}`);
   }
 }
@@ -77,24 +77,32 @@ class NotificationService {
 // Main application
 async function main() {
   // Create container with logging enabled
-  const container = new DIContainer({ 
-    enableLogging: true, 
-    logPrefix: 'ExampleApp' 
+  const container = new DIContainer({
+    enableLogging: true,
+    logPrefix: 'ExampleApp',
   });
 
   // Register services
   container.registerSingleton('ILogger', () => new ConsoleLogger());
-  
-  container.registerSingleton('IUserRepository', () => new InMemoryUserRepository());
-  
-  container.registerSingleton(UserService, () => new UserService(
-    container.resolve<IUserRepository>('IUserRepository'),
-    container.resolve<ILogger>('ILogger')
-  ));
-  
-  container.registerTransient(NotificationService, () => new NotificationService(
-    container.resolve<ILogger>('ILogger')
-  ));
+
+  container.registerSingleton(
+    'IUserRepository',
+    () => new InMemoryUserRepository(),
+  );
+
+  container.registerSingleton(
+    UserService,
+    () =>
+      new UserService(
+        container.resolve<IUserRepository>('IUserRepository'),
+        container.resolve<ILogger>('ILogger'),
+      ),
+  );
+
+  container.registerTransient(
+    NotificationService,
+    () => new NotificationService(container.resolve<ILogger>('ILogger')),
+  );
 
   // Use the services
   const userService = container.resolve(UserService);
@@ -119,8 +127,14 @@ async function main() {
   const userService2 = container.resolve(UserService);
 
   console.log('\n=== Instance Comparison ===');
-  console.log('NotificationService (transient) - Same instance?', notification1 === notification2);
-  console.log('UserService (singleton) - Same instance?', userService1 === userService2);
+  console.log(
+    'NotificationService (transient) - Same instance?',
+    notification1 === notification2,
+  );
+  console.log(
+    'UserService (singleton) - Same instance?',
+    userService1 === userService2,
+  );
 
   // Clean up
   await container.dispose();
@@ -130,10 +144,10 @@ async function main() {
 async function performanceExample() {
   console.log('\n=== Performance Monitoring Example ===\n');
 
-  const performanceContainer = new DIContainer({ 
+  const performanceContainer = new DIContainer({
     enablePerformanceMonitoring: true,
     enableLogging: true,
-    logPrefix: 'PerfExample'
+    logPrefix: 'PerfExample',
   });
 
   class FastService {
@@ -155,7 +169,7 @@ async function performanceExample() {
 
   class CachedService {
     private cache = new Map<string, string>();
-    
+
     getData(key: string): string {
       if (!this.cache.has(key)) {
         // Simulate data fetching
@@ -172,7 +186,10 @@ async function performanceExample() {
   // Register services with different scopes
   performanceContainer.registerSingleton(FastService, () => new FastService());
   performanceContainer.registerTransient(SlowService, () => new SlowService());
-  performanceContainer.registerSingleton(CachedService, () => new CachedService());
+  performanceContainer.registerSingleton(
+    CachedService,
+    () => new CachedService(),
+  );
 
   // Perform multiple resolutions
   console.log('Resolving services multiple times...\n');
@@ -180,43 +197,70 @@ async function performanceExample() {
   // Fast service (singleton - should be cached after first resolution)
   const fastService1 = performanceContainer.resolve(FastService);
   const fastService2 = performanceContainer.resolve(FastService);
-  console.log('Fast service results:', fastService1.processData(), '|', fastService2.processData());
+  console.log(
+    'Fast service results:',
+    fastService1.processData(),
+    '|',
+    fastService2.processData(),
+  );
 
   // Slow service (transient - new instance each time)
   const slowService1 = performanceContainer.resolve(SlowService);
   const slowService2 = performanceContainer.resolve(SlowService);
-  console.log('Slow service results:', slowService1.processData(), '|', slowService2.processData());
+  console.log(
+    'Slow service results:',
+    slowService1.processData(),
+    '|',
+    slowService2.processData(),
+  );
 
   // Cached service (singleton)
   const cachedService = performanceContainer.resolve(CachedService);
-  console.log('Cached service results:', cachedService.getData('test'), '|', cachedService.getData('test'));
+  console.log(
+    'Cached service results:',
+    cachedService.getData('test'),
+    '|',
+    cachedService.getData('test'),
+  );
 
   // Register and resolve string token services
   const CONFIG_TOKEN = 'appConfig';
   const LOGGER_TOKEN = 'perfLogger';
 
-  performanceContainer.registerInstance(CONFIG_TOKEN, { 
+  performanceContainer.registerInstance(CONFIG_TOKEN, {
     apiUrl: 'https://api.example.com',
-    timeout: 5000 
+    timeout: 5000,
   });
 
   performanceContainer.registerSingleton(LOGGER_TOKEN, () => ({
-    log: (message: string) => console.log(`[PERF-LOG] ${message}`)
+    log: (message: string) => console.log(`[PERF-LOG] ${message}`),
   }));
 
   // Resolve string tokens multiple times
-  const config1 = performanceContainer.resolve<{ apiUrl: string; timeout: number }>(CONFIG_TOKEN);
-  const config2 = performanceContainer.resolve<{ apiUrl: string; timeout: number }>(CONFIG_TOKEN);
-  const logger = performanceContainer.resolve<{ log: (msg: string) => void }>(LOGGER_TOKEN);
+  const config1 = performanceContainer.resolve<{
+    apiUrl: string;
+    timeout: number;
+  }>(CONFIG_TOKEN);
+  const config2 = performanceContainer.resolve<{
+    apiUrl: string;
+    timeout: number;
+  }>(CONFIG_TOKEN);
+  const logger = performanceContainer.resolve<{ log: (msg: string) => void }>(
+    LOGGER_TOKEN,
+  );
 
-  logger.log(`Config resolved: ${config1.apiUrl} (same as second? ${config1 === config2})`);
+  logger.log(
+    `Config resolved: ${config1.apiUrl} (same as second? ${config1 === config2})`,
+  );
 
   // Get and display performance statistics
   const stats = performanceContainer.getPerformanceStats();
   console.log('\n--- Container Performance Stats ---');
   console.log(`Total Services: ${stats.totalServices}`);
   console.log(`Total Resolutions: ${stats.totalResolutions}`);
-  console.log(`Average Resolution Time: ${stats.averageResolutionTime.toFixed(2)}ms`);
+  console.log(
+    `Average Resolution Time: ${stats.averageResolutionTime.toFixed(2)}ms`,
+  );
   console.log(`Singleton Services: ${stats.singletonServices}`);
   console.log(`Transient Services: ${stats.transientServices}`);
   console.log(`Services with Instances: ${stats.servicesWithInstances}`);
@@ -225,7 +269,7 @@ async function performanceExample() {
   // Get service-specific metrics
   const serviceMetrics = performanceContainer.getServiceMetrics();
   console.log('\n--- Service-Specific Metrics ---');
-  serviceMetrics.forEach(metric => {
+  serviceMetrics.forEach((metric) => {
     console.log(`${metric.token}:`);
     console.log(`  Resolutions: ${metric.totalResolutions}`);
     console.log(`  Average Time: ${metric.averageTime.toFixed(2)}ms`);
@@ -241,14 +285,18 @@ async function performanceExample() {
   if (stats.slowestServices.length > 0) {
     console.log('Slowest Services:');
     stats.slowestServices.forEach((service, index) => {
-      console.log(`  ${index + 1}. ${service.token}: ${service.averageTime.toFixed(2)}ms avg`);
+      console.log(
+        `  ${index + 1}. ${service.token}: ${service.averageTime.toFixed(2)}ms avg`,
+      );
     });
   }
 
   if (stats.mostResolvedServices.length > 0) {
     console.log('Most Resolved Services:');
     stats.mostResolvedServices.forEach((service, index) => {
-      console.log(`  ${index + 1}. ${service.token}: ${service.totalResolutions} resolutions`);
+      console.log(
+        `  ${index + 1}. ${service.token}: ${service.totalResolutions} resolutions`,
+      );
     });
   }
 
@@ -270,4 +318,4 @@ if (require.main === module) {
     .catch(console.error);
 }
 
-export { main, performanceExample }; 
+export { main, performanceExample };
