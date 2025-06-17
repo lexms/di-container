@@ -1,9 +1,7 @@
 import {
-  DIContainer,
-  LifetimeScope,
-  DIContainerError,
+  DIContainer, DIContainerError,
   CircularDependencyError,
-  ServiceNotFoundError,
+  ServiceNotFoundError
 } from '../src';
 
 describe('DIContainer', () => {
@@ -236,6 +234,355 @@ describe('DIContainer', () => {
       const result = service.processData();
 
       expect(result).toBe('Processed: data from repo');
+    });
+  });
+
+  describe('Default Exported Container', () => {
+    beforeEach(() => {
+      container.clear();
+    });
+
+    afterEach(async () => {
+      await container.dispose();
+    });
+
+    test('should be an instance of DIContainer', () => {
+      expect(container).toBeInstanceOf(DIContainer);
+    });
+
+    test('should work with basic service registration and resolution', () => {
+      interface ITestService {
+        getValue(): string;
+      }
+
+      class TestService implements ITestService {
+        getValue(): string {
+          return 'test value';
+        }
+      }
+
+      container.registerSingleton('ITestService', () => new TestService());
+
+      const service = container.resolve<ITestService>('ITestService');
+      expect(service.getValue()).toBe('test value');
+    });
+
+    test('should maintain singleton behavior across resolutions', () => {
+      class SingletonService {
+        private id = Math.random();
+
+        getId(): number {
+          return this.id;
+        }
+      }
+
+      container.registerSingleton(SingletonService, () => new SingletonService());
+
+      const instance1 = container.resolve(SingletonService);
+      const instance2 = container.resolve(SingletonService);
+
+      expect(instance1).toBe(instance2);
+      expect(instance1.getId()).toBe(instance2.getId());
+    });
+
+    test('should support method chaining for registrations', () => {
+      class ServiceA {}
+      class ServiceB {}
+      class ServiceC {}
+
+      expect(() => {
+        container
+          .registerSingleton(ServiceA, () => new ServiceA())
+          .registerSingleton(ServiceB, () => new ServiceB())
+          .registerTransient(ServiceC, () => new ServiceC());
+      }).not.toThrow();
+
+      expect(container.has(ServiceA)).toBe(true);
+      expect(container.has(ServiceB)).toBe(true);
+      expect(container.has(ServiceC)).toBe(true);
+    });
+  });
+
+  describe('Bootstrap Pattern', () => {
+    beforeEach(() => {
+      container.clear();
+    });
+
+    afterEach(async () => {
+      await container.dispose();
+    });
+
+    test('should support bootstrap pattern with dependencies', async () => {
+      interface ILogger {
+        log(message: string): void;
+      }
+
+      interface IRepository {
+        getData(): string[];
+      }
+
+      class MockLogger implements ILogger {
+        public logs: string[] = [];
+
+        log(message: string): void {
+          this.logs.push(message);
+        }
+      }
+
+      class MockRepository implements IRepository {
+        getData(): string[] {
+          return ['item1', 'item2'];
+        }
+      }
+
+      class TestService {
+        constructor(
+          private repository: IRepository,
+          private logger: ILogger
+        ) {}
+
+        processData(): string[] {
+          this.logger.log('Processing data');
+          const data = this.repository.getData();
+          this.logger.log(`Found ${data.length} items`);
+          return data;
+        }
+      }
+
+      async function bootstrap() {
+        container
+          .registerSingleton('ILogger', () => new MockLogger())
+          .registerSingleton('IRepository', () => new MockRepository())
+          .registerSingleton(TestService, () => new TestService(
+            container.resolve<IRepository>('IRepository'),
+            container.resolve<ILogger>('ILogger')
+          ));
+      }
+
+      await bootstrap();
+
+      const testService = container.resolve(TestService);
+      const logger = container.resolve<MockLogger>('ILogger');
+
+      const result = testService.processData();
+
+      expect(result).toEqual(['item1', 'item2']);
+      expect(logger.logs).toContain('Processing data');
+      expect(logger.logs).toContain('Found 2 items');
+    });
+
+    test('should handle complex dependency graphs in bootstrap', async () => {
+      interface IConfig {
+        apiUrl: string;
+      }
+
+      interface IHttpClient {
+        get(url: string): Promise<string>;
+      }
+
+      interface IApiService {
+        fetchData(): Promise<string>;
+      }
+
+      class Config implements IConfig {
+        apiUrl = 'https://api.example.com';
+      }
+
+      class HttpClient implements IHttpClient {
+        async get(url: string): Promise<string> {
+          return `Data from ${url}`;
+        }
+      }
+
+      class ApiService implements IApiService {
+        constructor(
+          private config: IConfig,
+          private httpClient: IHttpClient
+        ) {}
+
+        async fetchData(): Promise<string> {
+          return this.httpClient.get(this.config.apiUrl);
+        }
+      }
+
+      class ApplicationService {
+        constructor(private apiService: IApiService) {}
+
+        async run(): Promise<string> {
+          return this.apiService.fetchData();
+        }
+      }
+
+      async function bootstrap() {
+        container
+          .registerSingleton('IConfig', () => new Config())
+          .registerSingleton('IHttpClient', () => new HttpClient())
+          .registerSingleton('IApiService', () => new ApiService(
+            container.resolve<IConfig>('IConfig'),
+            container.resolve<IHttpClient>('IHttpClient')
+          ))
+          .registerSingleton(ApplicationService, () => new ApplicationService(
+            container.resolve<IApiService>('IApiService')
+          ));
+      }
+
+      await bootstrap();
+
+      const app = container.resolve(ApplicationService);
+      const result = await app.run();
+
+      expect(result).toBe('Data from https://api.example.com');
+    });
+
+    test('should support partial bootstrap and incremental registration', async () => {
+      class BaseService {}
+      class ExtendedService {
+        constructor(private base: BaseService) {}
+        
+        getBase(): BaseService {
+          return this.base;
+        }
+      }
+
+      async function bootstrapBase() {
+        container.registerSingleton(BaseService, () => new BaseService());
+      }
+
+      async function bootstrapExtended() {
+        container.registerSingleton(ExtendedService, () => new ExtendedService(
+          container.resolve(BaseService)
+        ));
+      }
+
+      await bootstrapBase();
+      expect(container.has(BaseService)).toBe(true);
+      expect(container.has(ExtendedService)).toBe(false);
+
+      await bootstrapExtended();
+      expect(container.has(ExtendedService)).toBe(true);
+
+      const extendedService = container.resolve(ExtendedService);
+      const baseService = container.resolve(BaseService);
+
+      expect(extendedService.getBase()).toBe(baseService);
+    });
+  });
+
+  describe('Example Integration Tests', () => {
+    beforeEach(() => {
+      container.clear();
+    });
+
+    afterEach(async () => {
+      await container.dispose();
+    });
+
+    test('should run bootstrap-usage example pattern successfully', async () => {
+      interface ILogger {
+        log(message: string): void;
+      }
+
+      interface IUserRepository {
+        getUsers(): User[];
+        getUserById(id: string): User | null;
+      }
+
+      interface User {
+        id: string;
+        name: string;
+        email: string;
+      }
+
+      class TestLogger implements ILogger {
+        public messages: string[] = [];
+
+        log(message: string): void {
+          this.messages.push(message);
+        }
+      }
+
+      class InMemoryUserRepository implements IUserRepository {
+        private users: User[] = [
+          { id: '1', name: 'John Doe', email: 'john@example.com' },
+          { id: '2', name: 'Jane Smith', email: 'jane@example.com' },
+        ];
+
+        getUsers(): User[] {
+          return [...this.users];
+        }
+
+        getUserById(id: string): User | null {
+          return this.users.find(user => user.id === id) || null;
+        }
+      }
+
+      class UserService {
+        constructor(
+          private userRepository: IUserRepository,
+          private logger: ILogger
+        ) {}
+
+        async getUserById(id: string): Promise<User | null> {
+          this.logger.log(`Fetching user with ID: ${id}`);
+          const user = this.userRepository.getUserById(id);
+          if (user) {
+            this.logger.log(`Found user: ${user.name}`);
+          } else {
+            this.logger.log(`User with ID ${id} not found`);
+          }
+          return user;
+        }
+
+        async getAllUsers(): Promise<User[]> {
+          this.logger.log('Fetching all users');
+          const users = this.userRepository.getUsers();
+          this.logger.log(`Found ${users.length} users`);
+          return users;
+        }
+      }
+
+      async function bootstrap() {
+        container
+          .registerSingleton('ILogger', () => new TestLogger())
+          .registerSingleton('IUserRepository', () => new InMemoryUserRepository())
+          .registerSingleton(UserService, () => new UserService(
+            container.resolve<IUserRepository>('IUserRepository'),
+            container.resolve<ILogger>('ILogger')
+          ));
+      }
+
+      await bootstrap();
+
+      const userService = container.resolve(UserService);
+      const logger = container.resolve<TestLogger>('ILogger');
+
+      const user = await userService.getUserById('1');
+      const users = await userService.getAllUsers();
+
+      expect(user).toEqual({ id: '1', name: 'John Doe', email: 'john@example.com' });
+      expect(users).toHaveLength(2);
+      expect(logger.messages).toContain('Fetching user with ID: 1');
+      expect(logger.messages).toContain('Found user: John Doe');
+      expect(logger.messages).toContain('Fetching all users');
+      expect(logger.messages).toContain('Found 2 users');
+    });
+
+    test('should handle service not found in bootstrap context', async () => {
+      class MissingDependencyService {
+        constructor(private missing: any) {}
+      }
+
+      async function faultyBootstrap() {
+        container.registerSingleton(MissingDependencyService, () => new MissingDependencyService(
+          container.resolve('NonExistentService')
+        ));
+      }
+
+      await faultyBootstrap();
+
+      expect(() => {
+        container.resolve(MissingDependencyService);
+      }).toThrow(ServiceNotFoundError);
     });
   });
 }); 
