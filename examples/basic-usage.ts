@@ -126,9 +126,148 @@ async function main() {
   await container.dispose();
 }
 
-// Run the example
-if (require.main === module) {
-  main().catch(console.error);
+// Performance monitoring example
+async function performanceExample() {
+  console.log('\n=== Performance Monitoring Example ===\n');
+
+  const performanceContainer = new DIContainer({ 
+    enablePerformanceMonitoring: true,
+    enableLogging: true,
+    logPrefix: 'PerfExample'
+  });
+
+  class FastService {
+    processData(): string {
+      return 'Fast processing complete';
+    }
+  }
+
+  class SlowService {
+    processData(): string {
+      // Simulate slow operation
+      const start = Date.now();
+      while (Date.now() - start < 25) {
+        // Busy wait for 25ms
+      }
+      return 'Slow processing complete';
+    }
+  }
+
+  class CachedService {
+    private cache = new Map<string, string>();
+    
+    getData(key: string): string {
+      if (!this.cache.has(key)) {
+        // Simulate data fetching
+        const start = Date.now();
+        while (Date.now() - start < 10) {
+          // Busy wait for 10ms
+        }
+        this.cache.set(key, `Data for ${key}`);
+      }
+      return this.cache.get(key)!;
+    }
+  }
+
+  // Register services with different scopes
+  performanceContainer.registerSingleton(FastService, () => new FastService());
+  performanceContainer.registerTransient(SlowService, () => new SlowService());
+  performanceContainer.registerSingleton(CachedService, () => new CachedService());
+
+  // Perform multiple resolutions
+  console.log('Resolving services multiple times...\n');
+
+  // Fast service (singleton - should be cached after first resolution)
+  const fastService1 = performanceContainer.resolve(FastService);
+  const fastService2 = performanceContainer.resolve(FastService);
+  console.log('Fast service results:', fastService1.processData(), '|', fastService2.processData());
+
+  // Slow service (transient - new instance each time)
+  const slowService1 = performanceContainer.resolve(SlowService);
+  const slowService2 = performanceContainer.resolve(SlowService);
+  console.log('Slow service results:', slowService1.processData(), '|', slowService2.processData());
+
+  // Cached service (singleton)
+  const cachedService = performanceContainer.resolve(CachedService);
+  console.log('Cached service results:', cachedService.getData('test'), '|', cachedService.getData('test'));
+
+  // Register and resolve string token services
+  const CONFIG_TOKEN = 'appConfig';
+  const LOGGER_TOKEN = 'perfLogger';
+
+  performanceContainer.registerInstance(CONFIG_TOKEN, { 
+    apiUrl: 'https://api.example.com',
+    timeout: 5000 
+  });
+
+  performanceContainer.registerSingleton(LOGGER_TOKEN, () => ({
+    log: (message: string) => console.log(`[PERF-LOG] ${message}`)
+  }));
+
+  // Resolve string tokens multiple times
+  const config1 = performanceContainer.resolve<{ apiUrl: string; timeout: number }>(CONFIG_TOKEN);
+  const config2 = performanceContainer.resolve<{ apiUrl: string; timeout: number }>(CONFIG_TOKEN);
+  const logger = performanceContainer.resolve<{ log: (msg: string) => void }>(LOGGER_TOKEN);
+
+  logger.log(`Config resolved: ${config1.apiUrl} (same as second? ${config1 === config2})`);
+
+  // Get and display performance statistics
+  const stats = performanceContainer.getPerformanceStats();
+  console.log('\n--- Container Performance Stats ---');
+  console.log(`Total Services: ${stats.totalServices}`);
+  console.log(`Total Resolutions: ${stats.totalResolutions}`);
+  console.log(`Average Resolution Time: ${stats.averageResolutionTime.toFixed(2)}ms`);
+  console.log(`Singleton Services: ${stats.singletonServices}`);
+  console.log(`Transient Services: ${stats.transientServices}`);
+  console.log(`Services with Instances: ${stats.servicesWithInstances}`);
+  console.log(`Container Uptime: ${stats.containerUptime}ms`);
+
+  // Get service-specific metrics
+  const serviceMetrics = performanceContainer.getServiceMetrics();
+  console.log('\n--- Service-Specific Metrics ---');
+  serviceMetrics.forEach(metric => {
+    console.log(`${metric.token}:`);
+    console.log(`  Resolutions: ${metric.totalResolutions}`);
+    console.log(`  Average Time: ${metric.averageTime.toFixed(2)}ms`);
+    console.log(`  Min Time: ${metric.minTime.toFixed(2)}ms`);
+    console.log(`  Max Time: ${metric.maxTime.toFixed(2)}ms`);
+    console.log(`  Scope: ${metric.scope}`);
+    console.log(`  Has Instance: ${metric.hasInstance}`);
+    console.log('');
+  });
+
+  // Show performance analysis
+  console.log('--- Performance Analysis ---');
+  if (stats.slowestServices.length > 0) {
+    console.log('Slowest Services:');
+    stats.slowestServices.forEach((service, index) => {
+      console.log(`  ${index + 1}. ${service.token}: ${service.averageTime.toFixed(2)}ms avg`);
+    });
+  }
+
+  if (stats.mostResolvedServices.length > 0) {
+    console.log('Most Resolved Services:');
+    stats.mostResolvedServices.forEach((service, index) => {
+      console.log(`  ${index + 1}. ${service.token}: ${service.totalResolutions} resolutions`);
+    });
+  }
+
+  // Demonstrate reset functionality
+  console.log('\n--- Resetting Performance Stats ---');
+  performanceContainer.resetPerformanceStats();
+  const resetStats = performanceContainer.getPerformanceStats();
+  console.log(`Resolutions after reset: ${resetStats.totalResolutions}`);
+
+  // Clean up
+  await performanceContainer.dispose();
+  console.log('Performance container disposed');
 }
 
-export { main }; 
+// Run the examples
+if (require.main === module) {
+  main()
+    .then(() => performanceExample())
+    .catch(console.error);
+}
+
+export { main, performanceExample }; 

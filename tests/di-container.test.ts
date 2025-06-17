@@ -585,4 +585,172 @@ describe('DIContainer', () => {
       }).toThrow(ServiceNotFoundError);
     });
   });
+
+  describe('Performance Monitoring', () => {
+    test('should track performance metrics when enabled', async () => {
+      const performanceContainer = new DIContainer({ 
+        enablePerformanceMonitoring: true 
+      });
+
+      class FastService {
+        getValue(): string {
+          return 'fast';
+        }
+      }
+
+      class SlowService {
+        getValue(): string {
+          // Simulate slow operation
+          const start = Date.now();
+          while (Date.now() - start < 10) {
+            // Busy wait for 10ms
+          }
+          return 'slow';
+        }
+      }
+
+      performanceContainer.registerSingleton(FastService, () => new FastService());
+      performanceContainer.registerTransient(SlowService, () => new SlowService());
+
+      // Resolve services multiple times
+      performanceContainer.resolve(FastService);
+      performanceContainer.resolve(FastService); // Should return cached instance
+      performanceContainer.resolve(SlowService);
+      performanceContainer.resolve(SlowService); // Should create new instance
+
+      const stats = performanceContainer.getPerformanceStats();
+      
+      expect(stats.totalServices).toBe(2);
+      expect(stats.totalResolutions).toBe(4);
+      expect(stats.singletonServices).toBe(1);
+      expect(stats.transientServices).toBe(1);
+      expect(stats.servicesWithInstances).toBe(1);
+      expect(stats.averageResolutionTime).toBeGreaterThan(0);
+      expect(stats.containerUptime).toBeGreaterThan(0);
+
+      // Check service-specific metrics
+      const serviceMetrics = performanceContainer.getServiceMetrics();
+      expect(serviceMetrics).toHaveLength(2);
+      
+      const fastServiceMetrics = serviceMetrics.find(m => m.token === 'FastService');
+      const slowServiceMetrics = serviceMetrics.find(m => m.token === 'SlowService');
+      
+      expect(fastServiceMetrics).toBeDefined();
+      expect(fastServiceMetrics!.totalResolutions).toBe(2);
+      expect(fastServiceMetrics!.isSingleton).toBe(true);
+      expect(fastServiceMetrics!.hasInstance).toBe(true);
+      
+      expect(slowServiceMetrics).toBeDefined();
+      expect(slowServiceMetrics!.totalResolutions).toBe(2);
+      expect(slowServiceMetrics!.isSingleton).toBe(false);
+      expect(slowServiceMetrics!.hasInstance).toBe(false);
+
+      await performanceContainer.dispose();
+    });
+
+    test('should not track performance when disabled', () => {
+      const noPerformanceContainer = new DIContainer({ 
+        enablePerformanceMonitoring: false 
+      });
+
+      class TestService {
+        getValue(): string {
+          return 'test';
+        }
+      }
+
+      noPerformanceContainer.registerSingleton(TestService, () => new TestService());
+      noPerformanceContainer.resolve(TestService);
+
+      const stats = noPerformanceContainer.getPerformanceStats();
+      
+      expect(stats.totalServices).toBe(1);
+      expect(stats.totalResolutions).toBe(0); // No tracking
+      expect(stats.totalResolutionTime).toBe(0);
+
+      const serviceMetrics = noPerformanceContainer.getServiceMetrics();
+      expect(serviceMetrics[0]?.totalResolutions).toBe(0);
+    });
+
+    test('should reset performance statistics', () => {
+      const performanceContainer = new DIContainer({ 
+        enablePerformanceMonitoring: true 
+      });
+
+      class TestService {
+        getValue(): string {
+          return 'test';
+        }
+      }
+
+      performanceContainer.registerSingleton(TestService, () => new TestService());
+      performanceContainer.resolve(TestService);
+
+      let stats = performanceContainer.getPerformanceStats();
+      expect(stats.totalResolutions).toBe(1);
+
+      performanceContainer.resetPerformanceStats();
+
+      stats = performanceContainer.getPerformanceStats();
+      expect(stats.totalResolutions).toBe(0);
+    });
+
+    test('should get metrics for specific service', () => {
+      const performanceContainer = new DIContainer({ 
+        enablePerformanceMonitoring: true 
+      });
+
+      class ServiceA {
+        getValue(): string {
+          return 'A';
+        }
+      }
+
+      class ServiceB {
+        getValue(): string {
+          return 'B';
+        }
+      }
+
+      performanceContainer.registerSingleton(ServiceA, () => new ServiceA());
+      performanceContainer.registerTransient(ServiceB, () => new ServiceB());
+      
+      performanceContainer.resolve(ServiceA);
+      performanceContainer.resolve(ServiceB);
+
+      const allMetrics = performanceContainer.getServiceMetrics();
+      expect(allMetrics).toHaveLength(2);
+
+      const serviceAMetrics = performanceContainer.getServiceMetrics(ServiceA);
+      expect(serviceAMetrics).toHaveLength(1);
+      expect(serviceAMetrics[0]?.token).toBe('ServiceA');
+      expect(serviceAMetrics[0]?.totalResolutions).toBe(1);
+    });
+
+    test('should track async resolution performance', async () => {
+      const performanceContainer = new DIContainer({ 
+        enablePerformanceMonitoring: true 
+      });
+
+      class AsyncService {
+        async getData(): Promise<string> {
+          return 'async data';
+        }
+      }
+
+      performanceContainer.registerSingleton(AsyncService, async () => {
+        await new Promise(resolve => setTimeout(resolve, 10));
+        return new AsyncService();
+      });
+
+      await performanceContainer.resolveAsync(AsyncService);
+      await performanceContainer.resolveAsync(AsyncService); // Should return cached
+
+      const metrics = performanceContainer.getServiceMetrics(AsyncService);
+      expect(metrics[0]?.totalResolutions).toBe(2);
+      expect(metrics[0]?.averageTime).toBeGreaterThan(0);
+
+      await performanceContainer.dispose();
+    });
+  });
 }); 

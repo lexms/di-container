@@ -4,6 +4,8 @@ import type {
   DIContainerOptions,
   Factory,
   IDIContainer,
+  ServicePerformanceMetrics,
+  ContainerPerformanceStats,
 } from './types';
 import { LifetimeScope } from './types';
 import { createLogger, type Logger } from './logger';
@@ -29,16 +31,28 @@ export class ServiceNotFoundError extends DIContainerError {
   }
 }
 
+interface ServicePerformanceData {
+  totalResolutions: number;
+  totalTime: number;
+  minTime: number;
+  maxTime: number;
+  lastResolutionTime: number;
+}
+
 export class DIContainer implements IDIContainer {
   private readonly _services = new Map<string | symbol, ServiceRegistration>();
   private readonly _logger: Logger;
   private readonly _resolutionStack = new Set<string | symbol>();
+  private readonly _performanceTracking: boolean;
+  private readonly _serviceMetrics = new Map<string | symbol, ServicePerformanceData>();
+  private readonly _startTime = Date.now();
 
   constructor(options: DIContainerOptions = {}) {
     this._logger = createLogger(
       options.enableLogging ?? false,
       options.logPrefix ?? 'DIContainer'
     );
+    this._performanceTracking = options.enablePerformanceMonitoring ?? false;
   }
 
   /**
@@ -106,6 +120,7 @@ export class DIContainer implements IDIContainer {
    */
   public resolve<T>(token: Constructor<T> | string | symbol): T {
     const key = this._getTokenKey(token);
+    const startTime = this._performanceTracking ? performance.now() : 0;
     
     this._logger.trace(`Resolving service: ${key.toString()}`);
     
@@ -122,6 +137,12 @@ export class DIContainer implements IDIContainer {
     // Return existing instance for singletons
     if (registration.singleton && registration.instance !== undefined) {
       this._logger.trace(`Returning existing singleton instance: ${key.toString()}`);
+      
+      if (this._performanceTracking) {
+        const endTime = performance.now();
+        this._updatePerformanceMetrics(key, endTime - startTime);
+      }
+      
       return registration.instance as T;
     }
 
@@ -143,6 +164,11 @@ export class DIContainer implements IDIContainer {
         registration.instance = instance;
       }
 
+      if (this._performanceTracking) {
+        const endTime = performance.now();
+        this._updatePerformanceMetrics(key, endTime - startTime);
+      }
+
       this._logger.trace(`Successfully resolved service: ${key.toString()}`);
       return instance as T;
     } finally {
@@ -155,6 +181,7 @@ export class DIContainer implements IDIContainer {
    */
   public async resolveAsync<T>(token: Constructor<T> | string | symbol): Promise<T> {
     const key = this._getTokenKey(token);
+    const startTime = this._performanceTracking ? performance.now() : 0;
     
     this._logger.trace(`Resolving service async: ${key.toString()}`);
     
@@ -171,6 +198,12 @@ export class DIContainer implements IDIContainer {
     // Return existing instance for singletons
     if (registration.singleton && registration.instance !== undefined) {
       this._logger.trace(`Returning existing singleton instance: ${key.toString()}`);
+      
+      if (this._performanceTracking) {
+        const endTime = performance.now();
+        this._updatePerformanceMetrics(key, endTime - startTime);
+      }
+      
       return registration.instance as T;
     }
 
@@ -183,6 +216,11 @@ export class DIContainer implements IDIContainer {
       // Store instance for singletons
       if (registration.singleton) {
         registration.instance = instance;
+      }
+
+      if (this._performanceTracking) {
+        const endTime = performance.now();
+        this._updatePerformanceMetrics(key, endTime - startTime);
       }
 
       this._logger.trace(`Successfully resolved service async: ${key.toString()}`);
@@ -237,6 +275,134 @@ export class DIContainer implements IDIContainer {
     }
     
     this.clear();
+  }
+
+  /**
+   * Get performance statistics for the container
+   */
+  public getPerformanceStats(): ContainerPerformanceStats {
+    const totalServices = this._services.size;
+    let singletonServices = 0;
+    let transientServices = 0;
+    let servicesWithInstances = 0;
+    let totalResolutions = 0;
+    let totalResolutionTime = 0;
+
+    for (const [key, registration] of this._services) {
+      if (registration.singleton) {
+        singletonServices++;
+        if (registration.instance !== undefined) {
+          servicesWithInstances++;
+        }
+      } else {
+        transientServices++;
+      }
+
+      const metrics = this._serviceMetrics.get(key);
+      if (metrics) {
+        totalResolutions += metrics.totalResolutions;
+        totalResolutionTime += metrics.totalTime;
+      }
+    }
+
+    const serviceMetrics = this.getServiceMetrics();
+    const sortedByTime = [...serviceMetrics].sort((a, b) => b.averageTime - a.averageTime);
+    const sortedByResolutions = [...serviceMetrics].sort((a, b) => b.totalResolutions - a.totalResolutions);
+
+    return {
+      totalServices,
+      totalResolutions,
+      totalResolutionTime,
+      averageResolutionTime: totalResolutions > 0 ? totalResolutionTime / totalResolutions : 0,
+      singletonServices,
+      transientServices,
+      servicesWithInstances,
+      slowestServices: sortedByTime.slice(0, 5),
+      fastestServices: sortedByTime.slice(-5).reverse(),
+      mostResolvedServices: sortedByResolutions.slice(0, 5),
+      containerUptime: Date.now() - this._startTime,
+    };
+  }
+
+  /**
+   * Get performance metrics for services
+   */
+  public getServiceMetrics(token?: Constructor | string | symbol): ServicePerformanceMetrics[] {
+    const results: ServicePerformanceMetrics[] = [];
+
+    const tokensToCheck = token ? [this._getTokenKey(token)] : Array.from(this._services.keys());
+
+    for (const key of tokensToCheck) {
+      const registration = this._services.get(key);
+      const metrics = this._serviceMetrics.get(key);
+
+      if (registration) {
+        const performanceData = metrics || {
+          totalResolutions: 0,
+          totalTime: 0,
+          minTime: 0,
+          maxTime: 0,
+          lastResolutionTime: 0,
+        };
+
+        results.push({
+          token: key.toString(),
+          totalResolutions: performanceData.totalResolutions,
+          totalTime: performanceData.totalTime,
+          averageTime: performanceData.totalResolutions > 0 
+            ? performanceData.totalTime / performanceData.totalResolutions 
+            : 0,
+          minTime: performanceData.minTime,
+          maxTime: performanceData.maxTime,
+          lastResolutionTime: performanceData.lastResolutionTime,
+          scope: registration.singleton ? LifetimeScope.SINGLETON : LifetimeScope.TRANSIENT,
+          isSingleton: registration.singleton,
+          hasInstance: registration.instance !== undefined,
+        });
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Reset performance statistics
+   */
+  public resetPerformanceStats(): void {
+    this._serviceMetrics.clear();
+    this._logger.debug('Performance statistics reset');
+  }
+
+  /**
+   * Update performance metrics for a service
+   */
+  private _updatePerformanceMetrics(key: string | symbol, resolutionTime: number): void {
+    if (!this._performanceTracking) {
+      return;
+    }
+
+    let metrics = this._serviceMetrics.get(key);
+    if (!metrics) {
+      metrics = {
+        totalResolutions: 0,
+        totalTime: 0,
+        minTime: Number.MAX_VALUE,
+        maxTime: 0,
+        lastResolutionTime: 0,
+      };
+      this._serviceMetrics.set(key, metrics);
+    }
+
+    metrics.totalResolutions++;
+    metrics.totalTime += resolutionTime;
+    metrics.lastResolutionTime = resolutionTime;
+    metrics.minTime = Math.min(metrics.minTime, resolutionTime);
+    metrics.maxTime = Math.max(metrics.maxTime, resolutionTime);
+
+    this._logger.trace(
+      `Performance: ${key.toString()} resolved in ${resolutionTime.toFixed(2)}ms ` +
+      `(total: ${metrics.totalResolutions}, avg: ${(metrics.totalTime / metrics.totalResolutions).toFixed(2)}ms)`
+    );
   }
 
   private _getTokenKey<T>(token: Constructor<T> | string | symbol): string | symbol {

@@ -24,6 +24,34 @@ export enum LifetimeScope {
 export interface DIContainerOptions {
   enableLogging?: boolean;
   logPrefix?: string;
+  enablePerformanceMonitoring?: boolean;
+}
+
+export interface ServicePerformanceMetrics {
+  token: string;
+  totalResolutions: number;
+  totalTime: number;
+  averageTime: number;
+  minTime: number;
+  maxTime: number;
+  lastResolutionTime: number;
+  scope: LifetimeScope;
+  isSingleton: boolean;
+  hasInstance: boolean;
+}
+
+export interface ContainerPerformanceStats {
+  totalServices: number;
+  totalResolutions: number;
+  totalResolutionTime: number;
+  averageResolutionTime: number;
+  singletonServices: number;
+  transientServices: number;
+  servicesWithInstances: number;
+  slowestServices: ServicePerformanceMetrics[];
+  fastestServices: ServicePerformanceMetrics[];
+  mostResolvedServices: ServicePerformanceMetrics[];
+  containerUptime: number;
 }
 
 export interface ServiceResolver<T> {
@@ -58,4 +86,9 @@ export interface IDIContainer {
   has(token: Constructor | string | symbol): boolean;
   
   dispose(): Promise<void>;
+  
+  // Performance monitoring methods
+  getPerformanceStats(): ContainerPerformanceStats;
+  getServiceMetrics(token?: Constructor | string | symbol): ServicePerformanceMetrics[];
+  resetPerformanceStats(): void;
 } 

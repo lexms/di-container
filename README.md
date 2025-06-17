@@ -13,6 +13,7 @@ A lightweight, TypeScript-first dependency injection container with support for 
 - 🎨 **Decorator Support**: Optional decorator-based dependency injection
 - 🧹 **Automatic Cleanup**: Built-in disposal pattern for resource cleanup
 - 📊 **Logging**: Optional logging for debugging and monitoring
+- ⚡ **Performance Monitoring**: Built-in performance tracking and metrics collection
 
 ## Installation
 
@@ -73,6 +74,7 @@ const container = new DIContainer(options?: DIContainerOptions);
 **Options:**
 - `enableLogging?: boolean` - Enable debug logging (default: false)
 - `logPrefix?: string` - Custom log prefix (default: 'DIContainer')
+- `enablePerformanceMonitoring?: boolean` - Enable performance tracking (default: false)
 
 #### Registration Methods
 
@@ -163,6 +165,36 @@ Dispose the container and call `dispose()` on all disposable services.
 await container.dispose();
 ```
 
+##### `getPerformanceStats(): ContainerPerformanceStats`
+
+Get comprehensive performance statistics for the container.
+
+```typescript
+const stats = container.getPerformanceStats();
+console.log(`Total resolutions: ${stats.totalResolutions}`);
+console.log(`Average time: ${stats.averageResolutionTime}ms`);
+```
+
+##### `getServiceMetrics(token?): ServicePerformanceMetrics[]`
+
+Get performance metrics for specific services or all services.
+
+```typescript
+// Get metrics for all services
+const allMetrics = container.getServiceMetrics();
+
+// Get metrics for specific service
+const serviceMetrics = container.getServiceMetrics(MyService);
+```
+
+##### `resetPerformanceStats(): void`
+
+Reset all performance statistics.
+
+```typescript
+container.resetPerformanceStats();
+```
+
 ## Advanced Usage
 
 ### Async Services
@@ -198,6 +230,54 @@ const apiUrl = container.resolve<string>('apiUrl');
 const DATABASE_CONFIG = Symbol('DatabaseConfig');
 container.registerInstance(DATABASE_CONFIG, { host: 'localhost', port: 5432 });
 const dbConfig = container.resolve<{ host: string; port: number }>(DATABASE_CONFIG);
+```
+
+### Performance Monitoring
+
+Enable performance monitoring to track service resolution times and identify bottlenecks.
+
+```typescript
+const container = new DIContainer({ 
+  enablePerformanceMonitoring: true,
+  enableLogging: true 
+});
+
+class FastService {
+  process() { return 'fast'; }
+}
+
+class SlowService {
+  process() {
+    // Simulate slow operation
+    const start = Date.now();
+    while (Date.now() - start < 100) {}
+    return 'slow';
+  }
+}
+
+container.registerSingleton(FastService, () => new FastService());
+container.registerTransient(SlowService, () => new SlowService());
+
+// Resolve services multiple times
+container.resolve(FastService);
+container.resolve(FastService); // Cached singleton
+container.resolve(SlowService);
+container.resolve(SlowService); // New instance
+
+// Get performance statistics
+const stats = container.getPerformanceStats();
+console.log(`Total resolutions: ${stats.totalResolutions}`);
+console.log(`Average resolution time: ${stats.averageResolutionTime}ms`);
+console.log(`Slowest services:`, stats.slowestServices);
+
+// Get service-specific metrics
+const metrics = container.getServiceMetrics();
+metrics.forEach(metric => {
+  console.log(`${metric.token}: ${metric.averageTime}ms avg (${metric.totalResolutions} calls)`);
+});
+
+// Reset statistics
+container.resetPerformanceStats();
 ```
 
 ### Disposable Services
