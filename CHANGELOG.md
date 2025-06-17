@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/lexms/di-container/compare/v1.0.0...v1.1.0) (2025-06-17)
+
+
+### Features
+
+* Add performance monitoring capabilities to DIContainer ([090d0dd](https://github.com/lexms/di-container/commit/090d0dd78282b4cb464e96697a2efbd24fa85a7c))
+
 # 1.0.0 (2025-06-17)
 
 
