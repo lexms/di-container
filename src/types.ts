@@ -1,10 +1,12 @@
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// biome-ignore lint/suspicious/noExplicitAny: Required for generic constructor types
+// biome-ignore lint/complexity/noBannedTypes: {} is needed for generic default type
 export type Constructor<T = {}> = new (...args: any[]) => T;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// biome-ignore lint/suspicious/noExplicitAny: Required for generic constructor types
+// biome-ignore lint/complexity/noBannedTypes: {} is needed for generic default type
 export type AbstractConstructor<T = {}> = abstract new (...args: any[]) => T;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// biome-ignore lint/suspicious/noExplicitAny: Required for constructor union types
 export type AnyConstructor = Constructor<any> | AbstractConstructor<any>;
 
 export type Factory<T> = () => T | Promise<T>;
@@ -54,41 +56,41 @@ export interface ContainerPerformanceStats {
   containerUptime: number;
 }
 
-export interface ServiceResolver<T> {
-  (container: IDIContainer): T | Promise<T>;
-}
+export type ServiceResolver<T> = (container: IDIContainer) => T | Promise<T>;
 
 export interface IDIContainer {
   register<T>(
     token: Constructor<T> | string | symbol,
     factory: Factory<T>,
-    scope?: LifetimeScope
+    scope?: LifetimeScope,
   ): this;
-  
+
   registerSingleton<T>(
     token: Constructor<T> | string | symbol,
-    factory: Factory<T>
+    factory: Factory<T>,
   ): this;
-  
+
   registerTransient<T>(
     token: Constructor<T> | string | symbol,
-    factory: Factory<T>
+    factory: Factory<T>,
   ): this;
-  
+
   registerInstance<T>(
     token: Constructor<T> | string | symbol,
-    instance: T
+    instance: T,
   ): this;
-  
+
   resolve<T>(token: Constructor<T> | string | symbol): T;
   resolveAsync<T>(token: Constructor<T> | string | symbol): Promise<T>;
-  
+
   has(token: Constructor | string | symbol): boolean;
-  
+
   dispose(): Promise<void>;
-  
+
   // Performance monitoring methods
   getPerformanceStats(): ContainerPerformanceStats;
-  getServiceMetrics(token?: Constructor | string | symbol): ServicePerformanceMetrics[];
+  getServiceMetrics(
+    token?: Constructor | string | symbol,
+  ): ServicePerformanceMetrics[];
   resetPerformanceStats(): void;
-} 
+}

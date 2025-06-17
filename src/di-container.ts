@@ -1,14 +1,14 @@
+import { createLogger, type Logger } from './logger';
 import type {
   Constructor,
-  ServiceRegistration,
+  ContainerPerformanceStats,
   DIContainerOptions,
   Factory,
   IDIContainer,
   ServicePerformanceMetrics,
-  ContainerPerformanceStats,
+  ServiceRegistration,
 } from './types';
 import { LifetimeScope } from './types';
-import { createLogger, type Logger } from './logger';
 
 export class DIContainerError extends Error {
   constructor(message: string) {
@@ -44,13 +44,16 @@ export class DIContainer implements IDIContainer {
   private readonly _logger: Logger;
   private readonly _resolutionStack = new Set<string | symbol>();
   private readonly _performanceTracking: boolean;
-  private readonly _serviceMetrics = new Map<string | symbol, ServicePerformanceData>();
+  private readonly _serviceMetrics = new Map<
+    string | symbol,
+    ServicePerformanceData
+  >();
   private readonly _startTime = Date.now();
 
   constructor(options: DIContainerOptions = {}) {
     this._logger = createLogger(
       options.enableLogging ?? false,
-      options.logPrefix ?? 'DIContainer'
+      options.logPrefix ?? 'DIContainer',
     );
     this._performanceTracking = options.enablePerformanceMonitoring ?? false;
   }
@@ -61,12 +64,14 @@ export class DIContainer implements IDIContainer {
   public register<T>(
     token: Constructor<T> | string | symbol,
     factory: Factory<T>,
-    scope: LifetimeScope = LifetimeScope.SINGLETON
+    scope: LifetimeScope = LifetimeScope.SINGLETON,
   ): this {
     const key = this._getTokenKey(token);
-    
-    this._logger.debug(`Registering service: ${key.toString()} with scope: ${scope}`);
-    
+
+    this._logger.debug(
+      `Registering service: ${key.toString()} with scope: ${scope}`,
+    );
+
     this._services.set(key, {
       factory,
       singleton: scope === LifetimeScope.SINGLETON,
@@ -80,7 +85,7 @@ export class DIContainer implements IDIContainer {
    */
   public registerSingleton<T>(
     token: Constructor<T> | string | symbol,
-    factory: Factory<T>
+    factory: Factory<T>,
   ): this {
     return this.register(token, factory, LifetimeScope.SINGLETON);
   }
@@ -90,7 +95,7 @@ export class DIContainer implements IDIContainer {
    */
   public registerTransient<T>(
     token: Constructor<T> | string | symbol,
-    factory: Factory<T>
+    factory: Factory<T>,
   ): this {
     return this.register(token, factory, LifetimeScope.TRANSIENT);
   }
@@ -100,12 +105,12 @@ export class DIContainer implements IDIContainer {
    */
   public registerInstance<T>(
     token: Constructor<T> | string | symbol,
-    instance: T
+    instance: T,
   ): this {
     const key = this._getTokenKey(token);
-    
+
     this._logger.debug(`Registering instance: ${key.toString()}`);
-    
+
     this._services.set(key, {
       factory: () => instance,
       singleton: true,
@@ -121,9 +126,9 @@ export class DIContainer implements IDIContainer {
   public resolve<T>(token: Constructor<T> | string | symbol): T {
     const key = this._getTokenKey(token);
     const startTime = this._performanceTracking ? performance.now() : 0;
-    
+
     this._logger.trace(`Resolving service: ${key.toString()}`);
-    
+
     // Check for circular dependencies
     if (this._resolutionStack.has(key)) {
       throw new CircularDependencyError(key.toString());
@@ -136,13 +141,15 @@ export class DIContainer implements IDIContainer {
 
     // Return existing instance for singletons
     if (registration.singleton && registration.instance !== undefined) {
-      this._logger.trace(`Returning existing singleton instance: ${key.toString()}`);
-      
+      this._logger.trace(
+        `Returning existing singleton instance: ${key.toString()}`,
+      );
+
       if (this._performanceTracking) {
         const endTime = performance.now();
         this._updatePerformanceMetrics(key, endTime - startTime);
       }
-      
+
       return registration.instance as T;
     }
 
@@ -151,11 +158,11 @@ export class DIContainer implements IDIContainer {
 
     try {
       const instance = registration.factory();
-      
+
       // Handle promises in synchronous resolution
       if (instance instanceof Promise) {
         throw new DIContainerError(
-          `Cannot resolve async service synchronously: ${key.toString()}. Use resolveAsync instead.`
+          `Cannot resolve async service synchronously: ${key.toString()}. Use resolveAsync instead.`,
         );
       }
 
@@ -179,12 +186,14 @@ export class DIContainer implements IDIContainer {
   /**
    * Resolve a service asynchronously
    */
-  public async resolveAsync<T>(token: Constructor<T> | string | symbol): Promise<T> {
+  public async resolveAsync<T>(
+    token: Constructor<T> | string | symbol,
+  ): Promise<T> {
     const key = this._getTokenKey(token);
     const startTime = this._performanceTracking ? performance.now() : 0;
-    
+
     this._logger.trace(`Resolving service async: ${key.toString()}`);
-    
+
     // Check for circular dependencies
     if (this._resolutionStack.has(key)) {
       throw new CircularDependencyError(key.toString());
@@ -197,13 +206,15 @@ export class DIContainer implements IDIContainer {
 
     // Return existing instance for singletons
     if (registration.singleton && registration.instance !== undefined) {
-      this._logger.trace(`Returning existing singleton instance: ${key.toString()}`);
-      
+      this._logger.trace(
+        `Returning existing singleton instance: ${key.toString()}`,
+      );
+
       if (this._performanceTracking) {
         const endTime = performance.now();
         this._updatePerformanceMetrics(key, endTime - startTime);
       }
-      
+
       return registration.instance as T;
     }
 
@@ -223,7 +234,9 @@ export class DIContainer implements IDIContainer {
         this._updatePerformanceMetrics(key, endTime - startTime);
       }
 
-      this._logger.trace(`Successfully resolved service async: ${key.toString()}`);
+      this._logger.trace(
+        `Successfully resolved service async: ${key.toString()}`,
+      );
       return instance as T;
     } finally {
       this._resolutionStack.delete(key);
@@ -258,22 +271,25 @@ export class DIContainer implements IDIContainer {
    */
   public async dispose(): Promise<void> {
     this._logger.debug('Disposing container');
-    
+
     for (const [key, registration] of this._services) {
       if (registration.instance && typeof registration.instance === 'object') {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        // biome-ignore lint/suspicious/noExplicitAny: Required for dispose method checking
         const instance = registration.instance as any;
         if (typeof instance.dispose === 'function') {
           try {
             await instance.dispose();
             this._logger.trace(`Disposed service: ${key.toString()}`);
           } catch (error) {
-            this._logger.error(`Error disposing service ${key.toString()}:`, error);
+            this._logger.error(
+              `Error disposing service ${key.toString()}:`,
+              error,
+            );
           }
         }
       }
     }
-    
+
     this.clear();
   }
 
@@ -306,14 +322,19 @@ export class DIContainer implements IDIContainer {
     }
 
     const serviceMetrics = this.getServiceMetrics();
-    const sortedByTime = [...serviceMetrics].sort((a, b) => b.averageTime - a.averageTime);
-    const sortedByResolutions = [...serviceMetrics].sort((a, b) => b.totalResolutions - a.totalResolutions);
+    const sortedByTime = [...serviceMetrics].sort(
+      (a, b) => b.averageTime - a.averageTime,
+    );
+    const sortedByResolutions = [...serviceMetrics].sort(
+      (a, b) => b.totalResolutions - a.totalResolutions,
+    );
 
     return {
       totalServices,
       totalResolutions,
       totalResolutionTime,
-      averageResolutionTime: totalResolutions > 0 ? totalResolutionTime / totalResolutions : 0,
+      averageResolutionTime:
+        totalResolutions > 0 ? totalResolutionTime / totalResolutions : 0,
       singletonServices,
       transientServices,
       servicesWithInstances,
@@ -327,10 +348,14 @@ export class DIContainer implements IDIContainer {
   /**
    * Get performance metrics for services
    */
-  public getServiceMetrics(token?: Constructor | string | symbol): ServicePerformanceMetrics[] {
+  public getServiceMetrics(
+    token?: Constructor | string | symbol,
+  ): ServicePerformanceMetrics[] {
     const results: ServicePerformanceMetrics[] = [];
 
-    const tokensToCheck = token ? [this._getTokenKey(token)] : Array.from(this._services.keys());
+    const tokensToCheck = token
+      ? [this._getTokenKey(token)]
+      : Array.from(this._services.keys());
 
     for (const key of tokensToCheck) {
       const registration = this._services.get(key);
@@ -349,13 +374,16 @@ export class DIContainer implements IDIContainer {
           token: key.toString(),
           totalResolutions: performanceData.totalResolutions,
           totalTime: performanceData.totalTime,
-          averageTime: performanceData.totalResolutions > 0 
-            ? performanceData.totalTime / performanceData.totalResolutions 
-            : 0,
+          averageTime:
+            performanceData.totalResolutions > 0
+              ? performanceData.totalTime / performanceData.totalResolutions
+              : 0,
           minTime: performanceData.minTime,
           maxTime: performanceData.maxTime,
           lastResolutionTime: performanceData.lastResolutionTime,
-          scope: registration.singleton ? LifetimeScope.SINGLETON : LifetimeScope.TRANSIENT,
+          scope: registration.singleton
+            ? LifetimeScope.SINGLETON
+            : LifetimeScope.TRANSIENT,
           isSingleton: registration.singleton,
           hasInstance: registration.instance !== undefined,
         });
@@ -376,7 +404,10 @@ export class DIContainer implements IDIContainer {
   /**
    * Update performance metrics for a service
    */
-  private _updatePerformanceMetrics(key: string | symbol, resolutionTime: number): void {
+  private _updatePerformanceMetrics(
+    key: string | symbol,
+    resolutionTime: number,
+  ): void {
     if (!this._performanceTracking) {
       return;
     }
@@ -401,11 +432,13 @@ export class DIContainer implements IDIContainer {
 
     this._logger.trace(
       `Performance: ${key.toString()} resolved in ${resolutionTime.toFixed(2)}ms ` +
-      `(total: ${metrics.totalResolutions}, avg: ${(metrics.totalTime / metrics.totalResolutions).toFixed(2)}ms)`
+        `(total: ${metrics.totalResolutions}, avg: ${(metrics.totalTime / metrics.totalResolutions).toFixed(2)}ms)`,
     );
   }
 
-  private _getTokenKey<T>(token: Constructor<T> | string | symbol): string | symbol {
+  private _getTokenKey<T>(
+    token: Constructor<T> | string | symbol,
+  ): string | symbol {
     if (typeof token === 'string' || typeof token === 'symbol') {
       return token;
     }
@@ -414,4 +447,4 @@ export class DIContainer implements IDIContainer {
 }
 
 // Export a default instance
-export const container = new DIContainer({ enableLogging: false }); 
+export const container = new DIContainer({ enableLogging: false });

@@ -54,4 +54,4 @@ export class NoOpLogger implements Logger {
 
 export function createLogger(enableLogging: boolean, prefix?: string): Logger {
   return enableLogging ? new ConsoleLogger(prefix) : new NoOpLogger();
-} 
+}

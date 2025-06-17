@@ -34,14 +34,14 @@ class InMemoryUserRepository implements IUserRepository {
   }
 
   getUserById(id: string): User | null {
-    return this.users.find(user => user.id === id) || null;
+    return this.users.find((user) => user.id === id) || null;
   }
 }
 
 class UserService {
   constructor(
     private userRepository: IUserRepository,
-    private logger: ILogger
+    private logger: ILogger,
   ) {}
 
   async getAllUsers(): Promise<User[]> {
@@ -68,25 +68,29 @@ async function bootstrap() {
   container
     .registerSingleton('ILogger', () => new ConsoleLogger())
     .registerSingleton('IUserRepository', () => new InMemoryUserRepository())
-    .registerSingleton(UserService, () => new UserService(
-      container.resolve<IUserRepository>('IUserRepository'),
-      container.resolve<ILogger>('ILogger')
-    ));
+    .registerSingleton(
+      UserService,
+      () =>
+        new UserService(
+          container.resolve<IUserRepository>('IUserRepository'),
+          container.resolve<ILogger>('ILogger'),
+        ),
+    );
 }
 
 async function main() {
   console.log('=== Bootstrap DI Container Example ===\n');
-  
+
   await bootstrap();
 
   const userService = container.resolve(UserService);
   const user = await userService.getUserById('1');
   console.log('Found user:', user);
-  
+
   // Get all users
   const users = await userService.getAllUsers();
   console.log('All users:', users);
-  
+
   // Clean up
   await container.dispose();
 }
@@ -97,4 +101,3 @@ if (require.main === module) {
 }
 
 export { main, bootstrap };
-

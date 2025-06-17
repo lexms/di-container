@@ -1,7 +1,8 @@
 import {
-  DIContainer, DIContainerError,
   CircularDependencyError,
-  ServiceNotFoundError
+  DIContainer,
+  DIContainerError,
+  ServiceNotFoundError,
 } from '../src';
 
 describe('DIContainer', () => {
@@ -85,7 +86,7 @@ describe('DIContainer', () => {
       }
 
       container.registerSingleton(AsyncService, async () => {
-        await new Promise(resolve => setTimeout(resolve, 10));
+        await new Promise((resolve) => setTimeout(resolve, 10));
         return new AsyncService();
       });
 
@@ -103,7 +104,7 @@ describe('DIContainer', () => {
 
       expect(() => container.resolve(AsyncService)).toThrow(DIContainerError);
       expect(() => container.resolve(AsyncService)).toThrow(
-        /Cannot resolve async service synchronously/
+        /Cannot resolve async service synchronously/,
       );
     });
   });
@@ -112,9 +113,11 @@ describe('DIContainer', () => {
     test('should throw ServiceNotFoundError for unregistered service', () => {
       class UnregisteredService {}
 
-      expect(() => container.resolve(UnregisteredService)).toThrow(ServiceNotFoundError);
       expect(() => container.resolve(UnregisteredService)).toThrow(
-        /Service not found for token/
+        ServiceNotFoundError,
+      );
+      expect(() => container.resolve(UnregisteredService)).toThrow(
+        /Service not found for token/,
       );
     });
 
@@ -127,10 +130,18 @@ describe('DIContainer', () => {
         constructor(public serviceA: ServiceA) {}
       }
 
-      container.registerSingleton(ServiceA, () => new ServiceA(container.resolve(ServiceB)));
-      container.registerSingleton(ServiceB, () => new ServiceB(container.resolve(ServiceA)));
+      container.registerSingleton(
+        ServiceA,
+        () => new ServiceA(container.resolve(ServiceB)),
+      );
+      container.registerSingleton(
+        ServiceB,
+        () => new ServiceB(container.resolve(ServiceA)),
+      );
 
-      expect(() => container.resolve(ServiceA)).toThrow(CircularDependencyError);
+      expect(() => container.resolve(ServiceA)).toThrow(
+        CircularDependencyError,
+      );
     });
   });
 
@@ -184,7 +195,10 @@ describe('DIContainer', () => {
         }
       }
 
-      container.registerSingleton(DisposableService, () => new DisposableService());
+      container.registerSingleton(
+        DisposableService,
+        () => new DisposableService(),
+      );
 
       // Resolve to create instance
       container.resolve(DisposableService);
@@ -201,7 +215,10 @@ describe('DIContainer', () => {
         }
       }
 
-      container.registerSingleton(FaultyDisposableService, () => new FaultyDisposableService());
+      container.registerSingleton(
+        FaultyDisposableService,
+        () => new FaultyDisposableService(),
+      );
 
       // Resolve to create instance
       container.resolve(FaultyDisposableService);
@@ -228,7 +245,10 @@ describe('DIContainer', () => {
       }
 
       container.registerSingleton(Repository, () => new Repository());
-      container.registerSingleton(Service, () => new Service(container.resolve(Repository)));
+      container.registerSingleton(
+        Service,
+        () => new Service(container.resolve(Repository)),
+      );
 
       const service = container.resolve(Service);
       const result = service.processData();
@@ -276,7 +296,10 @@ describe('DIContainer', () => {
         }
       }
 
-      container.registerSingleton(SingletonService, () => new SingletonService());
+      container.registerSingleton(
+        SingletonService,
+        () => new SingletonService(),
+      );
 
       const instance1 = container.resolve(SingletonService);
       const instance2 = container.resolve(SingletonService);
@@ -338,7 +361,7 @@ describe('DIContainer', () => {
       class TestService {
         constructor(
           private repository: IRepository,
-          private logger: ILogger
+          private logger: ILogger,
         ) {}
 
         processData(): string[] {
@@ -353,10 +376,14 @@ describe('DIContainer', () => {
         container
           .registerSingleton('ILogger', () => new MockLogger())
           .registerSingleton('IRepository', () => new MockRepository())
-          .registerSingleton(TestService, () => new TestService(
-            container.resolve<IRepository>('IRepository'),
-            container.resolve<ILogger>('ILogger')
-          ));
+          .registerSingleton(
+            TestService,
+            () =>
+              new TestService(
+                container.resolve<IRepository>('IRepository'),
+                container.resolve<ILogger>('ILogger'),
+              ),
+          );
       }
 
       await bootstrap();
@@ -397,7 +424,7 @@ describe('DIContainer', () => {
       class ApiService implements IApiService {
         constructor(
           private config: IConfig,
-          private httpClient: IHttpClient
+          private httpClient: IHttpClient,
         ) {}
 
         async fetchData(): Promise<string> {
@@ -417,13 +444,21 @@ describe('DIContainer', () => {
         container
           .registerSingleton('IConfig', () => new Config())
           .registerSingleton('IHttpClient', () => new HttpClient())
-          .registerSingleton('IApiService', () => new ApiService(
-            container.resolve<IConfig>('IConfig'),
-            container.resolve<IHttpClient>('IHttpClient')
-          ))
-          .registerSingleton(ApplicationService, () => new ApplicationService(
-            container.resolve<IApiService>('IApiService')
-          ));
+          .registerSingleton(
+            'IApiService',
+            () =>
+              new ApiService(
+                container.resolve<IConfig>('IConfig'),
+                container.resolve<IHttpClient>('IHttpClient'),
+              ),
+          )
+          .registerSingleton(
+            ApplicationService,
+            () =>
+              new ApplicationService(
+                container.resolve<IApiService>('IApiService'),
+              ),
+          );
       }
 
       await bootstrap();
@@ -438,7 +473,7 @@ describe('DIContainer', () => {
       class BaseService {}
       class ExtendedService {
         constructor(private base: BaseService) {}
-        
+
         getBase(): BaseService {
           return this.base;
         }
@@ -449,9 +484,10 @@ describe('DIContainer', () => {
       }
 
       async function bootstrapExtended() {
-        container.registerSingleton(ExtendedService, () => new ExtendedService(
-          container.resolve(BaseService)
-        ));
+        container.registerSingleton(
+          ExtendedService,
+          () => new ExtendedService(container.resolve(BaseService)),
+        );
       }
 
       await bootstrapBase();
@@ -512,14 +548,14 @@ describe('DIContainer', () => {
         }
 
         getUserById(id: string): User | null {
-          return this.users.find(user => user.id === id) || null;
+          return this.users.find((user) => user.id === id) || null;
         }
       }
 
       class UserService {
         constructor(
           private userRepository: IUserRepository,
-          private logger: ILogger
+          private logger: ILogger,
         ) {}
 
         async getUserById(id: string): Promise<User | null> {
@@ -544,11 +580,18 @@ describe('DIContainer', () => {
       async function bootstrap() {
         container
           .registerSingleton('ILogger', () => new TestLogger())
-          .registerSingleton('IUserRepository', () => new InMemoryUserRepository())
-          .registerSingleton(UserService, () => new UserService(
-            container.resolve<IUserRepository>('IUserRepository'),
-            container.resolve<ILogger>('ILogger')
-          ));
+          .registerSingleton(
+            'IUserRepository',
+            () => new InMemoryUserRepository(),
+          )
+          .registerSingleton(
+            UserService,
+            () =>
+              new UserService(
+                container.resolve<IUserRepository>('IUserRepository'),
+                container.resolve<ILogger>('ILogger'),
+              ),
+          );
       }
 
       await bootstrap();
@@ -559,7 +602,11 @@ describe('DIContainer', () => {
       const user = await userService.getUserById('1');
       const users = await userService.getAllUsers();
 
-      expect(user).toEqual({ id: '1', name: 'John Doe', email: 'john@example.com' });
+      expect(user).toEqual({
+        id: '1',
+        name: 'John Doe',
+        email: 'john@example.com',
+      });
       expect(users).toHaveLength(2);
       expect(logger.messages).toContain('Fetching user with ID: 1');
       expect(logger.messages).toContain('Found user: John Doe');
@@ -569,13 +616,18 @@ describe('DIContainer', () => {
 
     test('should handle service not found in bootstrap context', async () => {
       class MissingDependencyService {
-        constructor(private missing: any) {}
+        // biome-ignore lint/correctness/noUnusedPrivateClassMembers: Test dependency parameter
+        constructor(private _dependency: unknown) {}
       }
 
       async function faultyBootstrap() {
-        container.registerSingleton(MissingDependencyService, () => new MissingDependencyService(
-          container.resolve('NonExistentService')
-        ));
+        container.registerSingleton(
+          MissingDependencyService,
+          () =>
+            new MissingDependencyService(
+              container.resolve('NonExistentService'),
+            ),
+        );
       }
 
       await faultyBootstrap();
@@ -588,9 +640,12 @@ describe('DIContainer', () => {
 
   describe('Performance Monitoring', () => {
     test('should track performance metrics when enabled', async () => {
-      const performanceContainer = new DIContainer({ 
-        enablePerformanceMonitoring: true 
+      const performanceContainer = new DIContainer({
+        enablePerformanceMonitoring: true,
       });
+
+      // Add a small delay to ensure some uptime
+      await new Promise((resolve) => setTimeout(resolve, 5));
 
       class FastService {
         getValue(): string {
@@ -609,8 +664,14 @@ describe('DIContainer', () => {
         }
       }
 
-      performanceContainer.registerSingleton(FastService, () => new FastService());
-      performanceContainer.registerTransient(SlowService, () => new SlowService());
+      performanceContainer.registerSingleton(
+        FastService,
+        () => new FastService(),
+      );
+      performanceContainer.registerTransient(
+        SlowService,
+        () => new SlowService(),
+      );
 
       // Resolve services multiple times
       performanceContainer.resolve(FastService);
@@ -619,7 +680,7 @@ describe('DIContainer', () => {
       performanceContainer.resolve(SlowService); // Should create new instance
 
       const stats = performanceContainer.getPerformanceStats();
-      
+
       expect(stats.totalServices).toBe(2);
       expect(stats.totalResolutions).toBe(4);
       expect(stats.singletonServices).toBe(1);
@@ -631,15 +692,19 @@ describe('DIContainer', () => {
       // Check service-specific metrics
       const serviceMetrics = performanceContainer.getServiceMetrics();
       expect(serviceMetrics).toHaveLength(2);
-      
-      const fastServiceMetrics = serviceMetrics.find(m => m.token === 'FastService');
-      const slowServiceMetrics = serviceMetrics.find(m => m.token === 'SlowService');
-      
+
+      const fastServiceMetrics = serviceMetrics.find(
+        (m) => m.token === 'FastService',
+      );
+      const slowServiceMetrics = serviceMetrics.find(
+        (m) => m.token === 'SlowService',
+      );
+
       expect(fastServiceMetrics).toBeDefined();
       expect(fastServiceMetrics!.totalResolutions).toBe(2);
       expect(fastServiceMetrics!.isSingleton).toBe(true);
       expect(fastServiceMetrics!.hasInstance).toBe(true);
-      
+
       expect(slowServiceMetrics).toBeDefined();
       expect(slowServiceMetrics!.totalResolutions).toBe(2);
       expect(slowServiceMetrics!.isSingleton).toBe(false);
@@ -649,8 +714,8 @@ describe('DIContainer', () => {
     });
 
     test('should not track performance when disabled', () => {
-      const noPerformanceContainer = new DIContainer({ 
-        enablePerformanceMonitoring: false 
+      const noPerformanceContainer = new DIContainer({
+        enablePerformanceMonitoring: false,
       });
 
       class TestService {
@@ -659,11 +724,14 @@ describe('DIContainer', () => {
         }
       }
 
-      noPerformanceContainer.registerSingleton(TestService, () => new TestService());
+      noPerformanceContainer.registerSingleton(
+        TestService,
+        () => new TestService(),
+      );
       noPerformanceContainer.resolve(TestService);
 
       const stats = noPerformanceContainer.getPerformanceStats();
-      
+
       expect(stats.totalServices).toBe(1);
       expect(stats.totalResolutions).toBe(0); // No tracking
       expect(stats.totalResolutionTime).toBe(0);
@@ -673,8 +741,8 @@ describe('DIContainer', () => {
     });
 
     test('should reset performance statistics', () => {
-      const performanceContainer = new DIContainer({ 
-        enablePerformanceMonitoring: true 
+      const performanceContainer = new DIContainer({
+        enablePerformanceMonitoring: true,
       });
 
       class TestService {
@@ -683,7 +751,10 @@ describe('DIContainer', () => {
         }
       }
 
-      performanceContainer.registerSingleton(TestService, () => new TestService());
+      performanceContainer.registerSingleton(
+        TestService,
+        () => new TestService(),
+      );
       performanceContainer.resolve(TestService);
 
       let stats = performanceContainer.getPerformanceStats();
@@ -696,8 +767,8 @@ describe('DIContainer', () => {
     });
 
     test('should get metrics for specific service', () => {
-      const performanceContainer = new DIContainer({ 
-        enablePerformanceMonitoring: true 
+      const performanceContainer = new DIContainer({
+        enablePerformanceMonitoring: true,
       });
 
       class ServiceA {
@@ -714,7 +785,7 @@ describe('DIContainer', () => {
 
       performanceContainer.registerSingleton(ServiceA, () => new ServiceA());
       performanceContainer.registerTransient(ServiceB, () => new ServiceB());
-      
+
       performanceContainer.resolve(ServiceA);
       performanceContainer.resolve(ServiceB);
 
@@ -728,8 +799,8 @@ describe('DIContainer', () => {
     });
 
     test('should track async resolution performance', async () => {
-      const performanceContainer = new DIContainer({ 
-        enablePerformanceMonitoring: true 
+      const performanceContainer = new DIContainer({
+        enablePerformanceMonitoring: true,
       });
 
       class AsyncService {
@@ -739,7 +810,7 @@ describe('DIContainer', () => {
       }
 
       performanceContainer.registerSingleton(AsyncService, async () => {
-        await new Promise(resolve => setTimeout(resolve, 10));
+        await new Promise((resolve) => setTimeout(resolve, 10));
         return new AsyncService();
       });
 
@@ -753,4 +824,4 @@ describe('DIContainer', () => {
       await performanceContainer.dispose();
     });
   });
-}); 
+});
