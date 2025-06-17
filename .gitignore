@@ -103,7 +103,7 @@ web_modules/
 .yarn-integrity
 
 # pnpm
-pnpm-lock.yaml
+# pnpm-lock.yaml
 .pnpm-debug.log*
 
 # dotenv environment variables file
